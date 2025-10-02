@@ -1,0 +1,83 @@
+# lost_found_qr.py
+from flask import Flask, request, redirect, url_for, render_template_string
+import qrcode
+import os
+
+app = Flask(__name__)
+
+# store users
+users = {}
+
+# Home page to register lost item
+@app.route("/", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        name = request.form["name"]
+        contact = request.form["contact"]
+
+        # Save user
+        users[contact] = {"name": name, "contact": contact, "messages": []}
+
+        # Generate QR
+        qr = qrcode.make(f"http://127.0.0.1:5000/found/{contact}")
+        qr.save(f"static/{contact}.png")
+
+        return f"""
+        <h2>QR Code Generated!</h2>
+        <p>Name: {name}</p>
+        <p>Contact: {contact}</p>
+        <img src='/static/{contact}.png'>
+        <br><a href='/'>Go Home</a>
+        """
+    return """
+    <h2>Lost & Found using QR Code</h2>
+    <form method="post">
+        Name: <input type="text" name="name" required><br><br>
+        Email/Number: <input type="text" name="contact" required><br><br>
+        <button type="submit">Generate QR</button>
+    </form>
+    """
+
+# Page when someone scans the QR
+@app.route("/found/<contact>", methods=["GET", "POST"])
+def found(contact):
+    if contact not in users:
+        return "User not found!"
+
+    if request.method == "POST":
+        fname = request.form["fname"]
+        fcontact = request.form["fcontact"]
+
+        # Save notification
+        users[contact]["messages"].append(
+            f"Finder: {fname}, Contact: {fcontact}"
+        )
+
+        return f"""
+        <h3>Notification sent to owner!</h3>
+        <p>Finder Name: {fname}</p>
+        <p>Finder Contact: {fcontact}</p>
+        <a href='/found/{contact}'>Go Back</a>
+        """
+
+    return f"""
+    <h2>You found {users[contact]['name']}'s item!</h2>
+    <form method="post">
+        Your Name: <input type="text" name="fname" required><br><br>
+        Your Contact: <input type="text" name="fcontact" required><br><br>
+        <button type="submit">Notify Owner</button>
+    </form>
+    """
+
+# Owner can check messages
+@app.route("/messages/<contact>")
+def messages(contact):
+    if contact not in users:
+        return "User not found!"
+    msgs = "<br>".join(users[contact]["messages"])
+    return f"<h2>Notifications for {users[contact]['name']}:</h2>{msgs if msgs else 'No messages yet!'}"
+
+if __name__ == "__main__":
+    if not os.path.exists("static"):
+        os.makedirs("static")
+    app.run(debug=True)
